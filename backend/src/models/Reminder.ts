@@ -10,6 +10,10 @@ export interface IReminder extends Document {
   description?: string;
   remindAt: Date;
   notified: boolean;
+  status?: 'queued' | 'sending' | 'failed' | 'sent';
+  sentAt?: Date;
+  lastError?: string;
+  attempts?: number;
 }
 
 const ReminderSchema: Schema = new Schema({
@@ -17,7 +21,11 @@ const ReminderSchema: Schema = new Schema({
   title: { type: String, required: true },
   description: { type: String },
   remindAt: { type: Date, required: true },
-  notified: { type: Boolean, default: false }
+  notified: { type: Boolean, default: false },
+  status: { type: String, enum: ['queued', 'sending', 'failed', 'sent'], default: 'queued' },
+  sentAt: { type: Date },
+  lastError: { type: String },
+  attempts: { type: Number, default: 0 }
 });
 
 export const Reminder = mongoose.model<IReminder>('Reminder', ReminderSchema);

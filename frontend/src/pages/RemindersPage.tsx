@@ -59,13 +59,44 @@ const RemindersPage: React.FC = () => {
       </form>
       {error && <p style={{ color: 'red' }}>{error}</p>}
       <ul>
-        {reminders.map(reminder => (
-          <li key={reminder._id}>
-            <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})<br />
-            {reminder.description}<br />
-            <button onClick={() => handleDelete(reminder._id)}>Delete</button>
-          </li>
-        ))}
+        {reminders.map(reminder => {
+          const sent = reminder.status === 'sent' || reminder.notified;
+          const badgeColor = reminder.status === 'failed' ? 'crimson' : reminder.status === 'sending' ? 'darkorange' : reminder.status === 'sent' ? 'seagreen' : 'gray';
+          return (
+            <li key={reminder._id}>
+              {sent ? (
+                <span style={{ textDecoration: 'line-through', color: 'gray' }}>
+                  <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
+                </span>
+              ) : (
+                <>
+                  <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
+                </>
+              )}
+              {reminder.description && <div style={{ color: sent ? 'gray' : 'inherit' }}>{reminder.description}</div>}
+              <div style={{ margin: '4px 0' }}>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '2px 6px',
+                  borderRadius: '8px',
+                  background: badgeColor,
+                  color: 'white',
+                  fontSize: 12,
+                  marginRight: 8
+                }}>
+                  {reminder.status || (reminder.notified ? 'sent' : 'queued')}
+                </span>
+                {reminder.status === 'failed' && reminder.lastError && (
+                  <span title={reminder.lastError} style={{ color: 'crimson', fontSize: 12 }}>Delivery failed</span>
+                )}
+                {reminder.status === 'sent' && reminder.sentAt && (
+                  <span style={{ color: 'seagreen', fontSize: 12 }}>Sent at {new Date(reminder.sentAt).toLocaleString()}</span>
+                )}
+              </div>
+              <button onClick={() => handleDelete(reminder._id)}>Delete</button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
