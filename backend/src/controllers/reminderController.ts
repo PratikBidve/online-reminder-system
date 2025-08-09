@@ -46,3 +46,19 @@ export const deleteReminder = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Failed to delete reminder.', error });
   }
 };
+
+export const patchReminder = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const updated = await reminderService.patchReminder(id, userId, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ message: 'Reminder not found' });
+    }
+    res.json(updated);
+  } catch (error: any) {
+    const message = error?.message || 'Failed to update reminder.';
+    console.error('[Reminder] Failed to patch reminder:', error);
+    res.status(400).json({ message });
+  }
+};

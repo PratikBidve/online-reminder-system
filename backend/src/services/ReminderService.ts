@@ -17,6 +17,28 @@ export class ReminderService {
     return this.repo.deleteByIdForUser(id, userId);
   }
 
+  async patchReminder(id: string, userId: string, patch: Partial<IReminder>) {
+    // Only allow updating specific fields
+    const allowed: Partial<IReminder> = {} as any;
+    if (patch.title !== undefined) allowed.title = patch.title;
+    if (patch.description !== undefined) allowed.description = patch.description;
+    if (patch.remindAt !== undefined) allowed.remindAt = new Date(patch.remindAt);
+
+    // Requeue: allow client to set status back to 'queued' and reset failure
+    if (patch.status === 'queued') {
+      allowed.status = 'queued' as any;
+      (allowed as any).lastError = undefined;
+    }
+
+    // Do not allow direct transitions to sent/sending/notified via API
+    if (patch.status && patch.status !== 'queued') {
+      throw new Error('Only status=queued is allowed via PATCH.');
+    }
+
+    const updated = await this.repo.updateByIdForUser(id, userId, allowed);
+    return updated;
+  }
+
   async processDue(now: Date) {
     const due = await this.repo.findDue(now);
     for (const reminder of due) {

@@ -55,3 +55,16 @@ export const deleteReminder = async (id: string) => {
   });
   return res.json();
 };
+
+export const patchReminder = async (id: string, patch: any) => {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/reminders/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(patch)
+  });
+  return res.json();
+};

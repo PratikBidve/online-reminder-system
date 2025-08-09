@@ -9,6 +9,11 @@ const RemindersPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [remindAt, setRemindAt] = useState('');
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'failed' | 'sent'>('all');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editRemindAt, setEditRemindAt] = useState('');
 
   const fetchData = async () => {
     try {
@@ -22,6 +27,17 @@ const RemindersPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const toLocalInputValue = (d: string | Date) => {
+    const date = typeof d === 'string' ? new Date(d) : d;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +64,54 @@ const RemindersPage: React.FC = () => {
     }
   };
 
+  const handleRetry = async (id: string) => {
+    try {
+      await import('../utils/api').then(api => api.patchReminder(id, { status: 'queued' }));
+      fetchData();
+    } catch {
+      setError('Failed to retry reminder');
+    }
+  };
+
+  const startEdit = (r: any) => {
+    setEditingId(r._id);
+    setEditTitle(r.title || '');
+    setEditDescription(r.description || '');
+    setEditRemindAt(toLocalInputValue(r.remindAt));
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle('');
+    setEditDescription('');
+    setEditRemindAt('');
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      const patch: any = { title: editTitle, description: editDescription, remindAt: new Date(editRemindAt).toISOString() };
+      const res = await import('../utils/api').then(api => api.patchReminder(id, patch));
+      if (res && !res.message) {
+        cancelEdit();
+        fetchData();
+      } else {
+        setError(res?.message || 'Failed to save changes');
+      }
+    } catch {
+      setError('Failed to save changes');
+    }
+  };
+
+  const filtered = reminders.filter((r: any) => {
+    const isSent = r.status === 'sent' || r.notified;
+    const isFailed = r.status === 'failed';
+    const isUpcoming = (r.status === 'queued' || r.status === 'sending' || (!r.status && !r.notified));
+    if (filter === 'sent') return isSent;
+    if (filter === 'failed') return isFailed;
+    if (filter === 'upcoming') return isUpcoming;
+    return true;
+  });
+
   return (
     <div>
       <h2>My Reminders</h2>
@@ -58,22 +122,50 @@ const RemindersPage: React.FC = () => {
         <button type="submit">Add Reminder</button>
       </form>
       {error && <p style={{ color: 'red' }}>{error}</p>}
+      <div style={{ margin: '8px 0' }}>
+        <span style={{ marginRight: 8 }}>Filter:</span>
+        {(['all','upcoming','failed','sent'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            style={{
+              marginRight: 6,
+              padding: '4px 8px',
+              borderRadius: 6,
+              border: filter === f ? '2px solid #333' : '1px solid #aaa',
+              background: filter === f ? '#eee' : 'white'
+            }}
+          >{f}</button>
+        ))}
+      </div>
       <ul>
-        {reminders.map(reminder => {
+        {filtered.map(reminder => {
           const sent = reminder.status === 'sent' || reminder.notified;
           const badgeColor = reminder.status === 'failed' ? 'crimson' : reminder.status === 'sending' ? 'darkorange' : reminder.status === 'sent' ? 'seagreen' : 'gray';
           return (
             <li key={reminder._id}>
-              {sent ? (
-                <span style={{ textDecoration: 'line-through', color: 'gray' }}>
-                  <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
-                </span>
+              {editingId === reminder._id ? (
+                <div>
+                  <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} style={{ marginRight: 8 }} />
+                  <input type="datetime-local" value={editRemindAt} onChange={e => setEditRemindAt(e.target.value)} style={{ marginRight: 8 }} />
+                  <input type="text" placeholder="Description" value={editDescription} onChange={e => setEditDescription(e.target.value)} style={{ marginRight: 8, minWidth: 200 }} />
+                  <button onClick={() => saveEdit(reminder._id)} style={{ marginRight: 6 }}>Save</button>
+                  <button onClick={cancelEdit}>Cancel</button>
+                </div>
               ) : (
                 <>
-                  <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
+                  {sent ? (
+                    <span style={{ textDecoration: 'line-through', color: 'gray' }}>
+                      <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
+                    </span>
+                  ) : (
+                    <>
+                      <strong>{reminder.title}</strong> ({new Date(reminder.remindAt).toLocaleString()})
+                    </>
+                  )}
+                  {reminder.description && <div style={{ color: sent ? 'gray' : 'inherit' }}>{reminder.description}</div>}
                 </>
               )}
-              {reminder.description && <div style={{ color: sent ? 'gray' : 'inherit' }}>{reminder.description}</div>}
               <div style={{ margin: '4px 0' }}>
                 <span style={{
                   display: 'inline-block',
@@ -93,6 +185,12 @@ const RemindersPage: React.FC = () => {
                   <span style={{ color: 'seagreen', fontSize: 12 }}>Sent at {new Date(reminder.sentAt).toLocaleString()}</span>
                 )}
               </div>
+              {reminder.status === 'failed' && editingId !== reminder._id && (
+                <button onClick={() => handleRetry(reminder._id)} style={{ marginRight: 8 }}>Retry</button>
+              )}
+              {!sent && editingId !== reminder._id && (
+                <button onClick={() => startEdit(reminder)} style={{ marginRight: 8 }}>Edit</button>
+              )}
               <button onClick={() => handleDelete(reminder._id)}>Delete</button>
             </li>
           );
